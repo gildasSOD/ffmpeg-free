@@ -1,3 +1,9 @@
+<p align="right">
+  <a href="README.md"><img src="https://flagcdn.com/24x18/gb-eng.png" width="24" alt="English"> English</a>
+  &nbsp;|&nbsp;
+  <a href="README.ja.md"><img src="https://flagcdn.com/24x18/jp.png" width="24" alt="日本語"> 日本語</a>
+</p>
+
 # Royalty-Free FFmpeg (`ffmpeg-free`)
 
 **Redistributable, royalty-free builds of [FFmpeg](https://ffmpeg.org) for commercial use** — built

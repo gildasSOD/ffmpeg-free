@@ -12,8 +12,8 @@ for anything we distribute or encode. The build aims to stay *almost* as capable
 "kitchen-sink" FFmpeg: it can **read/decode practically anything**, and **encode** only with
 codecs that carry no patent royalties.
 
-The downstream consumer of record is the `smart-streamer` project (see the symlinked ADR
-`0003-ffmpeg-lgpl-build.md`), but this repo is a **standalone, general-purpose distribution**.
+The downstream consumer of record is the `smart-streamer` project (per its ADR-0003, "Ship and
+depend on the LGPL build of FFmpeg"), but this repo is a **standalone, general-purpose distribution**.
 
 ## 2. Core principle — two INDEPENDENT legal axes
 
