@@ -196,7 +196,7 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/download-artifact@v4
-        with: { path: artifacts }
+        with: { path: artifacts, pattern: "ffmpeg-free-*" }   # only build artifacts, not Docker telemetry
       - name: Build signed APT repo
         env:
           APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
@@ -246,7 +246,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { path: artifacts }
+        with: { path: artifacts, pattern: "ffmpeg-free-*" }   # only build artifacts, not Docker telemetry
       - name: Collect FFmpeg source (LGPL source offer) + assets
         shell: bash
         run: |
@@ -287,6 +287,8 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=latest
       - uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: "false"   # don't upload the .dockerbuild artifact (it broke download-artifact)
         with:
           context: .
           platforms: linux/amd64    # v1: amd64 only — build arm64 natively on ubuntu-24.04-arm + merge manifests (TODO), not slow QEMU
