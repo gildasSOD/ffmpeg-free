@@ -1,0 +1,17 @@
+# Build outputs (produced by scripts/build-ffmpeg.sh and CI)
+/staging/
+/build-work/
+/dist/
+/debroot/
+/site/
+/release/
+
+# Secrets / signing material — NEVER commit
+*.asc
+*.key
+secring*
+
+# Local-only scratch / external symlink (not part of the public repo)
+Google info.md
+0003-ffmpeg-lgpl-build.md
+.DS_Store

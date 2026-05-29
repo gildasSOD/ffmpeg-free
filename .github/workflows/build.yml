@@ -1,0 +1,295 @@
+name: build
+
+# Royalty-free FFmpeg, all target platforms. See CLAUDE.md / README.md.
+# v1 — expect a first-run shakeout of platform-specific package/toolchain quirks.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      l4t_tag:
+        description: "nvcr.io/nvidia/l4t-jetpack tag (JetPack 6.2 ~= r36.4.x; r36.4.3 sometimes missing on NGC)"
+        default: "r36.4.0"
+
+permissions:
+  contents: write      # create GitHub Releases on tags
+  packages: write      # push images to ghcr.io
+  pages: write         # deploy the APT repo to GitHub Pages
+  id-token: write      # Pages OIDC
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PROFILE: decode-all
+
+jobs:
+  # ---------------------------------------------------------------------------
+  build:
+    name: build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macos-arm64,        os: macos-14,         platform: macos,      arch: arm64, deb: false }
+          - { name: linux-amd64-cuda,   os: ubuntu-24.04,     platform: linux-cuda, arch: amd64, deb: true  }
+          - { name: linux-arm64,        os: ubuntu-24.04-arm, platform: linux,      arch: arm64, deb: true  }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if [ "${{ matrix.platform }}" = "macos" ]; then
+            brew install nasm cmake meson ninja pkg-config automake libtool xz
+          else
+            SUDO=sudo
+            $SUDO apt-get update
+            $SUDO apt-get install -y --no-install-recommends \
+              build-essential clang nasm yasm cmake meson ninja-build pkg-config \
+              autoconf automake libtool git curl xz-utils ca-certificates patchelf
+            if [ "${{ matrix.platform }}" = "linux-cuda" ]; then
+              # Free CUDA path: distro toolkit (headers/libs) + clang for --enable-cuda-llvm.
+              # NEVER libnpp / cuda-nvcc (FFmpeg "nonfree" -> unredistributable).
+              $SUDO apt-get install -y --no-install-recommends nvidia-cuda-toolkit
+            fi
+          fi
+
+      - name: Build + audit
+        shell: bash
+        run: |
+          set -euxo pipefail
+          export PLATFORM="${{ matrix.platform }}" PROFILE="$PROFILE"
+          export PREFIX="$PWD/staging" BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          export JOBS="$(getconf _NPROCESSORS_ONLN)"
+          bash scripts/build-ffmpeg.sh
+
+      - name: Make relocatable (Linux rpath)
+        if: matrix.platform != 'macos'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          # $ORIGIN-relative rpath so the tarball/.deb tree is position-independent.
+          find staging/bin -type f -exec patchelf --set-rpath '$ORIGIN/../lib' {} + || true
+
+      - name: Package tarball
+        id: pack
+        shell: bash
+        run: |
+          set -euxo pipefail
+          source scripts/versions.env
+          PKG="ffmpeg-free-${FFMPEG_VERSION}-${{ matrix.name }}"
+          mkdir -p dist
+          tar -C staging -czf "dist/${PKG}.tar.gz" .
+          echo "ffmpeg_version=${FFMPEG_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Package .deb
+        if: matrix.deb
+        shell: bash
+        run: |
+          set -euxo pipefail
+          source scripts/versions.env
+          ARCH="${{ matrix.arch }}"
+          ROOT="debroot"
+          rm -rf "$ROOT"; mkdir -p "$ROOT/opt/ffmpeg-free" "$ROOT/DEBIAN" "$ROOT/usr/bin" "$ROOT/etc/ld.so.conf.d"
+          cp -a staging/. "$ROOT/opt/ffmpeg-free/"
+          ln -sf /opt/ffmpeg-free/bin/ffmpeg  "$ROOT/usr/bin/ffmpeg-free"
+          ln -sf /opt/ffmpeg-free/bin/ffprobe "$ROOT/usr/bin/ffprobe-free"
+          echo /opt/ffmpeg-free/lib > "$ROOT/etc/ld.so.conf.d/ffmpeg-free.conf"
+          cat > "$ROOT/DEBIAN/control" <<EOF
+          Package: ffmpeg-free
+          Version: ${FFMPEG_VERSION}
+          Architecture: ${ARCH}
+          Maintainer: gildasSOD <gildas.tuffin@smaopi.com>
+          Section: video
+          Priority: optional
+          Homepage: https://github.com/gildasSOD/ffmpeg-free
+          Description: Royalty-free FFmpeg (LGPL, no GPL/nonfree, no patent-codec encoders)
+           Decodes virtually anything; encodes only royalty-free codecs (AV1, VP9, Opus,
+           MP3, MJPEG/PNG/WebP, FFV1). Installs under /opt/ffmpeg-free; CLIs are
+           exposed as ffmpeg-free / ffprobe-free.
+          EOF
+          printf '#!/bin/sh\nset -e\nldconfig\n'        > "$ROOT/DEBIAN/postinst"
+          printf '#!/bin/sh\nset -e\nldconfig || true\n' > "$ROOT/DEBIAN/postrm"
+          chmod 0755 "$ROOT/DEBIAN/postinst" "$ROOT/DEBIAN/postrm"
+          dpkg-deb --root-owner-group --build "$ROOT" "dist/ffmpeg-free_${FFMPEG_VERSION}_${ARCH}.deb"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-free-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  build-jetson:
+    name: build (jetson-l4t)
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: nvcr.io/nvidia/l4t-jetpack:${{ github.event.inputs.l4t_tag || 'r36.4.0' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build deps (L4T / Ubuntu 22.04 container)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential clang nasm yasm cmake ninja-build pkg-config \
+            autoconf automake libtool git curl xz-utils ca-certificates patchelf python3-pip
+          pip3 install --upgrade meson   # container's apt meson is often too old for dav1d
+      - name: Build + audit (Tegra V4L2 decode)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          export PLATFORM=jetson PROFILE="$PROFILE"
+          export PREFIX="$PWD/staging" BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          export JOBS="$(getconf _NPROCESSORS_ONLN)"
+          bash scripts/build-ffmpeg.sh
+      - name: Make relocatable + package
+        shell: bash
+        run: |
+          set -euxo pipefail
+          source scripts/versions.env
+          find staging/bin -type f -exec patchelf --set-rpath '$ORIGIN/../lib' {} + || true
+          mkdir -p dist
+          tar -C staging -czf "dist/ffmpeg-free-${FFMPEG_VERSION}-jetson-l4t.tar.gz" .
+          ROOT=debroot; rm -rf "$ROOT"
+          mkdir -p "$ROOT/opt/ffmpeg-free" "$ROOT/DEBIAN" "$ROOT/usr/bin" "$ROOT/etc/ld.so.conf.d"
+          cp -a staging/. "$ROOT/opt/ffmpeg-free/"
+          ln -sf /opt/ffmpeg-free/bin/ffmpeg  "$ROOT/usr/bin/ffmpeg-free"
+          ln -sf /opt/ffmpeg-free/bin/ffprobe "$ROOT/usr/bin/ffprobe-free"
+          echo /opt/ffmpeg-free/lib > "$ROOT/etc/ld.so.conf.d/ffmpeg-free.conf"
+          cat > "$ROOT/DEBIAN/control" <<EOF
+          Package: ffmpeg-free
+          Version: ${FFMPEG_VERSION}
+          Architecture: arm64
+          Maintainer: gildasSOD <gildas.tuffin@smaopi.com>
+          Section: video
+          Priority: optional
+          Homepage: https://github.com/gildasSOD/ffmpeg-free
+          Description: Royalty-free FFmpeg for NVIDIA Jetson (JetPack 6.2 / L4T r36)
+           Tegra V4L2 hardware decode; encodes only royalty-free codecs.
+          EOF
+          printf '#!/bin/sh\nset -e\nldconfig\n' > "$ROOT/DEBIAN/postinst"
+          chmod 0755 "$ROOT/DEBIAN/postinst"
+          dpkg-deb --root-owner-group --build "$ROOT" "dist/ffmpeg-free_${FFMPEG_VERSION}_arm64-jetson.deb"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-free-jetson-l4t
+          path: dist/*
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  publish-apt:
+    name: publish APT repo (Pages)
+    needs: [build, build-jetson]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: Build signed APT repo
+        env:
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          [ -n "${APT_GPG_PRIVATE_KEY:-}" ] || { echo "::error::APT_GPG_PRIVATE_KEY secret is not set"; exit 1; }
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends apt-utils gnupg
+          export GNUPGHOME="$(mktemp -d)"; chmod 700 "$GNUPGHOME"
+          echo "$APT_GPG_PRIVATE_KEY" | gpg --batch --import
+          KEYID="$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/{print $5; exit}')"
+          mkdir -p site/pool/main
+          find artifacts -name '*.deb' -exec cp {} site/pool/main/ \;
+          gpg --batch --yes --armor --export "$KEYID" > site/key.gpg
+          ( cd site
+            for arch in amd64 arm64; do
+              mkdir -p "dists/stable/main/binary-$arch"
+              apt-ftparchive --arch "$arch" packages pool/main > "dists/stable/main/binary-$arch/Packages"
+              gzip -kf "dists/stable/main/binary-$arch/Packages"
+            done
+            apt-ftparchive \
+              -o APT::FTPArchive::Release::Origin="ffmpeg-free" \
+              -o APT::FTPArchive::Release::Label="ffmpeg-free" \
+              -o APT::FTPArchive::Release::Suite="stable" \
+              -o APT::FTPArchive::Release::Codename="stable" \
+              -o APT::FTPArchive::Release::Architectures="amd64 arm64" \
+              -o APT::FTPArchive::Release::Components="main" \
+              release dists/stable > dists/stable/Release
+            gpg --batch --yes --default-key "$KEYID" -abs -o dists/stable/Release.gpg dists/stable/Release
+            gpg --batch --yes --default-key "$KEYID" --clearsign -o dists/stable/InRelease dists/stable/Release )
+          cat > site/index.html <<'HTML'
+          <!doctype html><meta charset="utf-8"><title>ffmpeg-free APT repo</title>
+          <h1>ffmpeg-free</h1><p>Royalty-free FFmpeg APT repository.
+          See <a href="https://github.com/gildasSOD/ffmpeg-free">the project README</a> to install.</p>
+          HTML
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: site }
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+  # ---------------------------------------------------------------------------
+  release:
+    name: GitHub Release
+    needs: [build, build-jetson]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: Collect FFmpeg source (LGPL source offer) + assets
+        shell: bash
+        run: |
+          set -euxo pipefail
+          source scripts/versions.env
+          mkdir -p release
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.deb' \) -exec cp {} release/ \;
+          curl -fSL --retry 3 -o "release/ffmpeg-${FFMPEG_VERSION}-source.tar.xz" \
+            "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz"
+          ( cd release && sha256sum * > SHA256SUMS )
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          body: |
+            Royalty-free FFmpeg ${{ github.ref_name }} — LGPL-2.1+, no GPL/nonfree, no H.264/H.265/AAC encoders.
+            The bundled `ffmpeg-*-source.tar.xz` is the exact upstream source (LGPL source offer).
+            See README.md for the full licensing/patent rationale and the APT repo install instructions.
+
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker image (ghcr)
+    needs: [build]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/ffmpeg-free
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64    # v1: amd64 only — build arm64 natively on ubuntu-24.04-arm + merge manifests (TODO), not slow QEMU
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
