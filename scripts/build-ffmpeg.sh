@@ -107,6 +107,10 @@ build_ogg_vorbis() {  # Ogg + Vorbis — autotools
 build_lame() {        # MP3 encoder — LGPL (MP3 patents expired)
   log "LAME ${LAME_VERSION} (MP3 encode, LGPL — patents expired 2017)"
   fetch_tar "https://downloads.sourceforge.net/project/lame/lame/${LAME_VERSION}/lame-${LAME_VERSION}.tar.gz" lame
+  # LAME 3.100 exports 'lame_init_old' in libmp3lame.sym but never defines it, which fails the macOS
+  # arm64 link ("Undefined symbols: _lame_init_old"). Drop that line (portable sed; harmless elsewhere).
+  sed '/lame_init_old/d' "${WORK}/lame/include/libmp3lame.sym" > "${WORK}/lame/include/libmp3lame.sym.tmp" \
+    && mv "${WORK}/lame/include/libmp3lame.sym.tmp" "${WORK}/lame/include/libmp3lame.sym"
   ( cd "${WORK}/lame"; ./configure --prefix="${PREFIX}" --enable-shared --disable-static --disable-frontend
     make -j"${JOBS}"; make install )
 }
