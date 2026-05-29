@@ -96,10 +96,14 @@ build_ogg_vorbis() {  # Ogg + Vorbis — autotools
   fetch_tar "https://downloads.xiph.org/releases/vorbis/libvorbis-${VORBIS_VERSION}.tar.gz" vorbis
   ( cd "${WORK}/vorbis"; ./configure --prefix="${PREFIX}" --enable-shared --disable-static \
       --with-ogg="${PREFIX}"
-    # Build only the library + headers + .pc files; the test/ programs (test_sharedbook)
-    # fail to link on clang/arm64 and are not needed for the FFmpeg build.
-    make -j"${JOBS}" SUBDIRS='include lib'
-    make install SUBDIRS='include lib' )
+    # Build/install only the library + headers + .pc files via per-directory make. The test/ dir's
+    # test_sharedbook fails to link on clang/arm64 (macOS); a command-line `make SUBDIRS=` override
+    # can't be used because it propagates into sub-makes and breaks recursion (cd into a missing dir).
+    make -j"${JOBS}" -C lib
+    make -C lib install
+    make -C include install
+    install -d "${PREFIX}/lib/pkgconfig"
+    cp -f vorbis.pc vorbisenc.pc vorbisfile.pc "${PREFIX}/lib/pkgconfig/" )
 }
 build_lame() {        # MP3 encoder — LGPL (MP3 patents expired)
   log "LAME ${LAME_VERSION} (MP3 encode, LGPL — patents expired 2017)"
@@ -144,13 +148,17 @@ build_ffmpeg() {
     macos)      hw=(--enable-videotoolbox) ;;
     linux)      hw=() ;;  # generic; add --enable-vaapi if libva is present
     linux-cuda) build_nvcodec_headers
-                hw=(--enable-ffnvcodec --enable-cuda-llvm --enable-cuvid --enable-nvdec --enable-nvenc)
+                # NVENC/NVDEC/cuvid via the MIT ffnvcodec headers — the royalty-free HW path.
+                # --enable-cuda-llvm (compiles the bundled CUDA *filters* with clang) is a v1 TODO:
+                # it needs a verified clang+CUDA toolchain and is NOT required for HW encode/decode.
+                hw=(--enable-ffnvcodec --enable-cuvid --enable-nvdec --enable-nvenc)
                 [ -d /usr/local/cuda/include ] && CFLAGS_EXTRA="${CFLAGS_EXTRA} -I/usr/local/cuda/include"
                 [ -d /usr/local/cuda/lib64 ]   && LDFLAGS_EXTRA="${LDFLAGS_EXTRA} -L/usr/local/cuda/lib64" ;;
-    jetson)     # Tegra HW codecs use V4L2 M2M. Full HW enc/dec needs out-of-tree NVMPI patches
-                # (e.g. jocover/jetson-ffmpeg) — TODO; those mainly add H.264/H.265 encoders we disable
-                # anyway, so v1 enables v4l2-m2m for decode and leaves nvmpi as a documented follow-up.
-                hw=(--enable-v4l2-m2m) ;;
+    jetson)     # Tegra HW codecs use V4L2 M2M / NVMPI. Real Jetson HW enc/dec needs out-of-tree
+                # patches (e.g. jocover/jetson-ffmpeg) — TODO. v1 builds in the L4T container with
+                # software codecs; v4l2-m2m is left to configure autodetect (so a missing header
+                # can't fail the build), and NVMPI integration is the documented follow-up.
+                hw=() ;;
     *) die "unknown PLATFORM=${PLATFORM}" ;;
   esac
 
