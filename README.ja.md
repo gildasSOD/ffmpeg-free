@@ -275,8 +275,9 @@ HW アクセラレーションは**全プラットフォームでデコードに
   --enable-libsvtav1 --enable-libaom --enable-libdav1d \
   --enable-libvpx --enable-libopus --enable-libvorbis \
   --enable-libwebp --enable-libmp3lame \
-  --disable-encoder=h264_nvenc,hevc_nvenc,h264_videotoolbox,hevc_videotoolbox,\
-h264_qsv,hevc_qsv,h264_vaapi,hevc_vaapi,h264_v4l2m2m,hevc_v4l2m2m,aac,aac_at,aac_mf \
+  --disable-encoders \
+  --enable-encoder=libsvtav1,libaom_av1,libvpx,libvpx_vp9,libopus,libvorbis,flac,alac,\
+libmp3lame,mjpeg,png,apng,gif,libwebp,libwebp_anim,ffv1,wavpack,pcm_s16le,rawvideo \
   --disable-ffplay --disable-doc          # build ffmpeg + ffprobe (default); skip ffplay (needs SDL)
 ```
 

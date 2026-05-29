@@ -137,8 +137,11 @@ build_ffmpeg() {
     --enable-libwebp --enable-libmp3lame
   )
 
-  # Encoders we always remove so HW accel can't smuggle a patent codec back in (Axis 2).
-  local disable_enc="h264_nvenc,hevc_nvenc,h264_videotoolbox,hevc_videotoolbox,h264_qsv,hevc_qsv,h264_vaapi,hevc_vaapi,h264_amf,hevc_amf,h264_mf,hevc_mf,h264_v4l2m2m,hevc_v4l2m2m,h264_vulkan,hevc_vulkan,aac,aac_at,aac_mf"
+  # ENCODER ALLOWLIST (Axis 2): disable ALL encoders, then re-enable only royalty-free ones.
+  # A denylist is unsafe — FFmpeg ships native encoders for many encumbered codecs (MPEG-4 Part 2,
+  # MPEG-1/2, H.263, WMV/WMA, AC-3, ProRes) plus HW H.264/H.265 (nvenc/vaapi/vulkan/qsv/amf/mf/...).
+  # The allowlist is the auditable contract: anything not listed simply cannot be produced.
+  local enable_enc="libsvtav1,libaom_av1,libvpx,libvpx_vp9,ffv1,ffvhuff,huffyuv,utvideo,magicyuv,mjpeg,png,apng,gif,bmp,tiff,qoi,libwebp,libwebp_anim,rawvideo,wrapped_avframe,libopus,libvorbis,flac,alac,libmp3lame,wavpack,pcm_s16le,pcm_s16be,pcm_s24le,pcm_s32le,pcm_f32le,pcm_u8,pcm_mulaw,pcm_alaw,ass,ssa,subrip,webvtt,mov_text,text"
 
   # Per-platform hardware flags. NOTE: the free CUDA path only — never --enable-libnpp /
   # --enable-cuda-nvcc / --enable-cuda-sdk (FFmpeg "nonfree" → unredistributable).
@@ -178,7 +181,7 @@ build_ffmpeg() {
       --disable-doc --disable-debug \
       --disable-ffplay \
       "${enable_libs[@]}" "${hw[@]}" "${extra[@]}" \
-      --disable-encoder="${disable_enc}" \
+      --disable-encoders --enable-encoder="${enable_enc}" \
       --extra-cflags="${CFLAGS_EXTRA}" \
       --extra-ldflags="${LDFLAGS_EXTRA}"
     make -j"${JOBS}"
@@ -208,12 +211,14 @@ audit() {
     die "AUDIT FAILED: binary is GPL/nonfree"
   fi
   local enc; enc="$("${PREFIX}/bin/ffmpeg" -hide_banner -encoders 2>/dev/null || true)"
-  # Match encoder column entries for the patent codecs (word-boundary on codec id).
-  if grep -qiE '(^| )(libx264|libx265|h264_|hevc_|nvenc.*264|aac($| )|aac_)' <<<"$enc"; then
-    printf '%s\n' "$enc" | grep -iE 'h264|hevc|265|aac' || true
-    die "AUDIT FAILED: a patent-codec ENCODER is present"
+  # Belt to the allowlist's braces: assert no patent-encumbered ENCODER slipped through.
+  local bad; bad="$(printf '%s\n' "$enc" | awk '/^ [VAS]/{print $2}' \
+    | grep -iE '^(libx264|libx265|libfdk|h26[1-5]|h264_|hevc_|mpeg[124]|msmpeg4|m4v|h263|flv$|wmv[0-9]|wmav|aac|ac3|eac3|prores|dnxhd|vc1|dts|truehd)' || true)"
+  if [ -n "${bad}" ]; then
+    printf 'leaked encoders:\n%s\n' "${bad}"
+    die "AUDIT FAILED: patent-encumbered ENCODER(s) present"
   fi
-  log "AUDIT OK: LGPL, no nonfree, no H.264/H.265/AAC encoders."
+  log "AUDIT OK: LGPL, no nonfree, encoders limited to the royalty-free allowlist."
 }
 
 build_dav1d

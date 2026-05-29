@@ -53,14 +53,15 @@ FFmpeg's native `mjpeg`/`jpeg` decoder is royalty-free with no caveats.
 **NEVER (hard rules):**
 - `--enable-gpl` → would pull `libx264`, `libx265`, `libxvid`, GPL filters. Forbidden.
 - `--enable-nonfree` → would pull `libfdk-aac` (non-redistributable). Forbidden.
-- **No H.264/H.265 encoders of any kind.** FFmpeg has no native one; we must also
-  `--disable-encoder=h264_nvenc,hevc_nvenc,h264_videotoolbox,hevc_videotoolbox,h264_qsv,hevc_qsv,h264_vaapi,hevc_vaapi,h264_v4l2m2m,hevc_v4l2m2m`
-  so HW accel (§4) cannot reintroduce them.
-- **No AAC encoder.** `--disable-encoder=aac,aac_at,aac_mf` (AAC patents are not yet uniformly
-  expired). AAC **decode** stays enabled.
+- **Encoder ALLOWLIST, not a denylist.** FFmpeg ships native encoders for many *encumbered* codecs
+  (MPEG-4 Part 2, MPEG-1/2, H.263, WMV/WMA, AC-3, ProRes) plus HW H.264/H.265 (nvenc/vaapi/vulkan/qsv/…).
+  A denylist always misses some, so we build `--disable-encoders --enable-encoder=<RF set>`: AV1
+  (libsvtav1/libaom), VP8/9 (libvpx), Opus, Vorbis, FLAC, ALAC, MP3 (libmp3lame), MJPEG, PNG, GIF, WebP,
+  FFV1 + lossless/raw/PCM + text subtitles. Everything else — including **AAC** — cannot be produced.
 
-**Auditability:** after build, `ffmpeg -encoders` must list **zero** H.264/H.265/AAC encoders.
-This is the provable claim the README rests on, and the runtime self-check (§7) verifies it.
+**Auditability:** after build, `ffmpeg -encoders` lists **only** royalty-free encoders (no H.264/H.265,
+AAC, MPEG-4/2, WMV, AC-3, ProRes…). The build's `audit()` asserts this and fails otherwise — the provable
+claim the README rests on (and the runtime self-check, §7).
 
 ## 4. Hardware acceleration
 
@@ -87,8 +88,9 @@ Common base (all platforms):
 --enable-libsvtav1 --enable-libaom --enable-libdav1d \
 --enable-libvpx --enable-libopus --enable-libvorbis \
 --enable-libwebp --enable-libmp3lame
---disable-encoder=h264_nvenc,hevc_nvenc,h264_videotoolbox,hevc_videotoolbox,\
-h264_qsv,hevc_qsv,h264_vaapi,hevc_vaapi,h264_v4l2m2m,hevc_v4l2m2m,aac,aac_at,aac_mf
+--disable-encoders \
+--enable-encoder=libsvtav1,libaom_av1,libvpx,libvpx_vp9,libopus,libvorbis,flac,alac,\
+libmp3lame,mjpeg,png,apng,gif,libwebp,libwebp_anim,ffv1,wavpack,pcm_s16le,rawvideo
 --disable-ffplay --disable-doc           # ffmpeg+ffprobe build by default; skip ffplay (SDL)
 ```
 Per-platform adds:

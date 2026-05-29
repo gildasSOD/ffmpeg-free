@@ -176,7 +176,7 @@ Reads virtually anything; encodes only royalty-free codecs.
   hardware decode.
 - **Encoders:** **AV1** (`libsvtav1`, `libaom`), **VP9/VP8** (`libvpx`), **Opus** (`libopus`),
   **Vorbis** (`libvorbis`), **FLAC**, **ALAC**, **MP3** (`libmp3lame`), **MJPEG/PNG/WebP**, **FFV1**.
-- **Removed encoders (enforced):** `h264_*`, `hevc_*` (all hardware variants), and `aac`/`aac_at`/`aac_mf`.
+- **Enforcement — allowlist:** built with `--disable-encoders --enable-encoder=<the codecs above + lossless/raw/PCM/text>`, so it *cannot* emit any other, encumbered codec — not only H.264/H.265/AAC but also MPEG-4 Part 2, MPEG-1/2, H.263, WMV/WMA, AC-3, ProRes.
 
 ### Profile B — `strict-rf`
 For zero patent exposure: as above **but the H.264/H.265/AAC/etc. *decoders* are also removed.** Cannot
@@ -262,8 +262,9 @@ The canonical `./configure` (common base; per-platform additions in §7 and `CLA
   --enable-libsvtav1 --enable-libaom --enable-libdav1d \
   --enable-libvpx --enable-libopus --enable-libvorbis \
   --enable-libwebp --enable-libmp3lame \
-  --disable-encoder=h264_nvenc,hevc_nvenc,h264_videotoolbox,hevc_videotoolbox,\
-h264_qsv,hevc_qsv,h264_vaapi,hevc_vaapi,h264_v4l2m2m,hevc_v4l2m2m,aac,aac_at,aac_mf \
+  --disable-encoders \
+  --enable-encoder=libsvtav1,libaom_av1,libvpx,libvpx_vp9,libopus,libvorbis,flac,alac,\
+libmp3lame,mjpeg,png,apng,gif,libwebp,libwebp_anim,ffv1,wavpack,pcm_s16le,rawvideo \
   --disable-ffplay --disable-doc          # build ffmpeg + ffprobe (default); skip ffplay (needs SDL)
 ```
 
