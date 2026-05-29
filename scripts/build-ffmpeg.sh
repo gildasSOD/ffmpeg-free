@@ -96,14 +96,13 @@ build_ogg_vorbis() {  # Ogg + Vorbis — autotools
   fetch_tar "https://downloads.xiph.org/releases/vorbis/libvorbis-${VORBIS_VERSION}.tar.gz" vorbis
   ( cd "${WORK}/vorbis"; ./configure --prefix="${PREFIX}" --enable-shared --disable-static \
       --with-ogg="${PREFIX}"
-    # Build/install only the library + headers + .pc files via per-directory make. The test/ dir's
-    # test_sharedbook fails to link on clang/arm64 (macOS); a command-line `make SUBDIRS=` override
-    # can't be used because it propagates into sub-makes and breaks recursion (cd into a missing dir).
-    make -j"${JOBS}" -C lib
-    make -C lib install
-    make -C include install
-    install -d "${PREFIX}/lib/pkgconfig"
-    cp -f vorbis.pc vorbisenc.pc vorbisfile.pc "${PREFIX}/lib/pkgconfig/" )
+    # libvorbis 1.3.7's configure injects the obsolete '-force_cpusubtype_ALL' flag on macOS, which
+    # the modern linker rejects (this is what broke test_sharedbook). Strip it from the generated
+    # Makefiles with a portable sed (no -i); a harmless no-op on Linux where the flag isn't added.
+    find . -name Makefile | while read -r f; do
+      sed 's/-force_cpusubtype_ALL//g' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+    done
+    make -j"${JOBS}"; make install )
 }
 build_lame() {        # MP3 encoder — LGPL (MP3 patents expired)
   log "LAME ${LAME_VERSION} (MP3 encode, LGPL — patents expired 2017)"
