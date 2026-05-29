@@ -184,7 +184,7 @@ build_ffmpeg() {
       --enable-shared --disable-static --enable-pic \
       --disable-doc --disable-debug \
       --disable-ffplay \
-      "${enable_libs[@]}" "${hw[@]}" "${extra[@]}" \
+      "${enable_libs[@]}" ${hw[@]+"${hw[@]}"} ${extra[@]+"${extra[@]}"} \
       --disable-encoders --enable-encoder="${enable_enc}" \
       --extra-cflags="${CFLAGS_EXTRA}" \
       --extra-ldflags="${LDFLAGS_EXTRA}"
