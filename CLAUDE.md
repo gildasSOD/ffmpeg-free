@@ -89,7 +89,7 @@ Common base (all platforms):
 --enable-libwebp --enable-libmp3lame
 --disable-encoder=h264_nvenc,hevc_nvenc,h264_videotoolbox,hevc_videotoolbox,\
 h264_qsv,hevc_qsv,h264_vaapi,hevc_vaapi,h264_v4l2m2m,hevc_v4l2m2m,aac,aac_at,aac_mf
---enable-programs=ffmpeg,ffprobe --disable-doc
+--disable-ffplay --disable-doc           # ffmpeg+ffprobe build by default; skip ffplay (SDL)
 ```
 Per-platform adds:
 - **macOS:** `--enable-videotoolbox`.

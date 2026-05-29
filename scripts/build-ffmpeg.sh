@@ -95,7 +95,11 @@ build_ogg_vorbis() {  # Ogg + Vorbis — autotools
     make -j"${JOBS}"; make install )
   fetch_tar "https://downloads.xiph.org/releases/vorbis/libvorbis-${VORBIS_VERSION}.tar.gz" vorbis
   ( cd "${WORK}/vorbis"; ./configure --prefix="${PREFIX}" --enable-shared --disable-static \
-      --with-ogg="${PREFIX}"; make -j"${JOBS}"; make install )
+      --with-ogg="${PREFIX}"
+    # Build only the library + headers + .pc files; the test/ programs (test_sharedbook)
+    # fail to link on clang/arm64 and are not needed for the FFmpeg build.
+    make -j"${JOBS}" SUBDIRS='include lib'
+    make install SUBDIRS='include lib' )
 }
 build_lame() {        # MP3 encoder — LGPL (MP3 patents expired)
   log "LAME ${LAME_VERSION} (MP3 encode, LGPL — patents expired 2017)"
@@ -165,7 +169,7 @@ build_ffmpeg() {
       --disable-gpl --disable-nonfree \
       --enable-shared --disable-static --enable-pic \
       --disable-doc --disable-debug \
-      --enable-programs --enable-ffprobe \
+      --disable-ffplay \
       "${enable_libs[@]}" "${hw[@]}" "${extra[@]}" \
       --disable-encoder="${disable_enc}" \
       --extra-cflags="${CFLAGS_EXTRA}" \
