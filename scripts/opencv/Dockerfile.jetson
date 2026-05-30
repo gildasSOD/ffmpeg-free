@@ -39,6 +39,20 @@ print('\n'.join(l for l in bi.splitlines() if re.search('FFMPEG|GStreamer', l)))
  && ldd /usr/local/lib/libopencv_videoio.so* | grep -q '/opt/ffmpeg-free/lib/libavcodec' \
     && echo 'OK: OpenCV videoio links ffmpeg-free'
 
+# 4) Functional check: an AV1 VideoWriter works; an H.264 writer is (correctly) refused
+RUN python3 - <<'PY'
+import cv2, numpy as np, os
+w = cv2.VideoWriter('/tmp/t.mkv', cv2.CAP_FFMPEG, cv2.VideoWriter_fourcc(*'av01'), 10, (128, 96))
+assert w.isOpened(), 'AV1 VideoWriter failed to open (ffmpeg-free AV1 encoder missing?)'
+for _ in range(10):
+    w.write(np.zeros((96, 128, 3), np.uint8))
+w.release()
+assert os.path.getsize('/tmp/t.mkv') > 0, 'AV1 output is empty'
+h = cv2.VideoWriter('/tmp/h.mp4', cv2.CAP_FFMPEG, cv2.VideoWriter_fourcc(*'avc1'), 10, (128, 96))
+assert not h.isOpened(), 'H.264 VideoWriter opened — a patent encoder leaked into OpenCV!'
+print('OK: AV1 VideoWriter works (%d bytes); H.264 writer correctly refused' % os.path.getsize('/tmp/t.mkv'))
+PY
+
 LABEL org.opencontainers.image.title="opencv-free-jetson" \
       org.opencontainers.image.description="OpenCV+CUDA on Jetson (JetPack 6.2), video I/O via royalty-free ffmpeg-free" \
       org.opencontainers.image.licenses="Apache-2.0"

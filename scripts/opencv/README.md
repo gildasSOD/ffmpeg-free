@@ -23,7 +23,7 @@ to **rebuild OpenCV against ffmpeg-free** and drop the patent encoders from the 
 curl -fsSL https://gildassod.github.io/ffmpeg-free/key.gpg | sudo tee /usr/share/keyrings/ffmpeg-free.gpg >/dev/null
 echo "deb [signed-by=/usr/share/keyrings/ffmpeg-free.gpg] https://gildassod.github.io/ffmpeg-free stable main" \
   | sudo tee /etc/apt/sources.list.d/ffmpeg-free.list
-sudo apt update && sudo apt install ffmpeg-free
+sudo apt update && sudo apt install ffmpeg-free-jetson   # Jetson/L4T build (arm64, JetPack 6.2)
 
 # 2) build OpenCV against it (auto-detects jobs; add zram/swap on an 8 GB Nano for more)
 sudo ./build_opencv.sh                       # or: OPENCV_VERSION=4.13.0 JOBS=4 ./build_opencv.sh

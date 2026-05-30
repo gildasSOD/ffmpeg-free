@@ -280,7 +280,7 @@ All dependencies are built from pinned source (not distro packages) for reproduc
 curl -fsSL https://gildassod.github.io/ffmpeg-free/key.gpg | sudo tee /usr/share/keyrings/ffmpeg-free.gpg >/dev/null
 echo "deb [signed-by=/usr/share/keyrings/ffmpeg-free.gpg] https://gildassod.github.io/ffmpeg-free stable main" \
   | sudo tee /etc/apt/sources.list.d/ffmpeg-free.list
-sudo apt update && sudo apt install ffmpeg-free
+sudo apt update && sudo apt install ffmpeg-free          # on Jetson (JetPack 6.2): ffmpeg-free-jetson
 ```
 
 **macOS (Homebrew tap):**

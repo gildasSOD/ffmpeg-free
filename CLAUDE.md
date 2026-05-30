@@ -125,7 +125,8 @@ Artifacts produced by CI, per platform:
 1. **CLI** — `ffmpeg` + `ffprobe` (tarball).
 2. **Shared libs + headers** — `libav*` `.dylib`/`.so` + dev headers (for LGPL dynamic linking).
 3. **Docker images** — per-arch OCI (amd64, arm64, L4T/Jetson); matches the smart-streamer ADR.
-4. **OS packages** — `ffmpeg-free` `.deb` (Ubuntu 24.04) + a Homebrew tap (macOS). macOS CLI tarballs
+4. **OS packages** — `ffmpeg-free` `.deb` (amd64/arm64, Ubuntu 24.04) + **`ffmpeg-free-jetson`** (arm64,
+   JetPack 6.2/L4T — distinct package name so the two arm64 builds don't collide) + a Homebrew tap (macOS). macOS CLI tarballs
    ship **unsigned** (no codesign/notarization); `brew` install clears the Gatekeeper quarantine, direct
    downloads may need `xattr -dr com.apple.quarantine`.
 5. **Public APT repo on GitHub Pages** — signed `dists/`+`pool/` so users run

@@ -74,6 +74,8 @@ jobs:
           export PLATFORM="${{ matrix.platform }}" PROFILE="$PROFILE"
           export PREFIX="$PWD/staging" BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           export JOBS="$(getconf _NPROCESSORS_ONLN)"
+          export SMOKE_H264_SAMPLE="$PWD/tests/fixtures/sample_h264_aac.mp4"
+          export SMOKE_JPEG_SAMPLE="$PWD/tests/fixtures/sample.jpg"
           bash scripts/build-ffmpeg.sh
 
       - name: Make relocatable (Linux rpath)
@@ -156,6 +158,8 @@ jobs:
           export PLATFORM=jetson PROFILE="$PROFILE"
           export PREFIX="$PWD/staging" BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           export JOBS="$(getconf _NPROCESSORS_ONLN)"
+          export SMOKE_H264_SAMPLE="$PWD/tests/fixtures/sample_h264_aac.mp4"
+          export SMOKE_JPEG_SAMPLE="$PWD/tests/fixtures/sample.jpg"
           bash scripts/build-ffmpeg.sh
       - name: Make relocatable + package
         shell: bash
@@ -172,7 +176,9 @@ jobs:
           ln -sf /opt/ffmpeg-free/bin/ffprobe "$ROOT/usr/bin/ffprobe-free"
           echo /opt/ffmpeg-free/lib > "$ROOT/etc/ld.so.conf.d/ffmpeg-free.conf"
           cat > "$ROOT/DEBIAN/control" <<EOF
-          Package: ffmpeg-free
+          Package: ffmpeg-free-jetson
+          Conflicts: ffmpeg-free
+          Replaces: ffmpeg-free
           Version: ${FFMPEG_VERSION}
           Architecture: arm64
           Maintainer: gildasSOD <gildas.tuffin@smaopi.com>
@@ -184,7 +190,7 @@ jobs:
           EOF
           printf '#!/bin/sh\nset -e\nldconfig\n' > "$ROOT/DEBIAN/postinst"
           chmod 0755 "$ROOT/DEBIAN/postinst"
-          dpkg-deb --root-owner-group --build "$ROOT" "dist/ffmpeg-free_${FFMPEG_VERSION}_arm64-jetson.deb"
+          dpkg-deb --root-owner-group --build "$ROOT" "dist/ffmpeg-free-jetson_${FFMPEG_VERSION}_arm64.deb"
       - uses: actions/upload-artifact@v4
         with:
           name: ffmpeg-free-jetson-l4t

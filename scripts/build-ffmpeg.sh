@@ -226,6 +226,48 @@ audit() {
 }
 
 # ---------------------------------------------------------------------------
+# Smoke test — prove the binary WORKS (not just that it lacks bad encoders): royalty-free encode
+# round-trips, confirm the patent-codec DECODERS are present (decode-all), and decode real
+# H.264/AAC + JPEG fixtures when CI provides them via SMOKE_H264_SAMPLE / SMOKE_JPEG_SAMPLE.
+# ---------------------------------------------------------------------------
+smoke_test() {
+  local ff="${PREFIX}/bin/ffmpeg" fp="${PREFIX}/bin/ffprobe" t; t="$(mktemp -d)"
+  local V=(-f lavfi -i testsrc=size=128x96:rate=10:duration=1)
+  local A=(-f lavfi -i sine=frequency=440:duration=1)
+  probe() { "$fp" -v error -select_streams "$1":0 -show_entries stream=codec_name -of csv=p=0 "$2"; }
+  log "Smoke test: royalty-free encode round-trips + decode capability"
+
+  "$ff" -hide_banner -loglevel error "${V[@]}" -c:v libsvtav1 -preset 12 -y "$t/v.mkv"
+  [ "$(probe v "$t/v.mkv")" = av1 ]  || die "smoke: AV1 encode failed"
+  "$ff" -hide_banner -loglevel error "${V[@]}" -c:v libvpx-vp9 -deadline realtime -cpu-used 8 -y "$t/v.webm"
+  [ "$(probe v "$t/v.webm")" = vp9 ] || die "smoke: VP9 encode failed"
+  "$ff" -hide_banner -loglevel error "${A[@]}" -c:a libopus -y "$t/a.opus"
+  [ "$(probe a "$t/a.opus")" = opus ] || die "smoke: Opus encode failed"
+  "$ff" -hide_banner -loglevel error "${A[@]}" -c:a libmp3lame -y "$t/a.mp3"
+  [ "$(probe a "$t/a.mp3")" = mp3 ]  || die "smoke: MP3 encode failed"
+  "$ff" -hide_banner -loglevel error -f lavfi -i testsrc=size=128x96 -frames:v 1 -y "$t/i.jpg"
+  "$ff" -hide_banner -loglevel error -i "$t/i.jpg" -frames:v 1 -y "$t/i.png"
+  [ -s "$t/i.png" ] || die "smoke: JPEG encode/decode round-trip failed"
+
+  # decode-all contract: the patent-codec DECODERS must be present
+  local decs; decs="$("$ff" -hide_banner -decoders 2>/dev/null | awk '/^ [VAS]/{print $2}')"
+  for d in h264 hevc aac; do grep -qx "$d" <<<"$decs" || die "smoke: '$d' decoder missing"; done
+
+  # decode REAL patent-codec input when CI provides fixtures (proves "reads any MP4")
+  if [ -n "${SMOKE_H264_SAMPLE:-}" ] && [ -f "${SMOKE_H264_SAMPLE}" ]; then
+    "$ff" -hide_banner -loglevel error -i "${SMOKE_H264_SAMPLE}" -frames:v 1 -y "$t/h264.png"
+    [ -s "$t/h264.png" ] || die "smoke: H.264/AAC sample decode failed"
+    log "smoke: decoded real H.264/AAC sample OK"
+  fi
+  if [ -n "${SMOKE_JPEG_SAMPLE:-}" ] && [ -f "${SMOKE_JPEG_SAMPLE}" ]; then
+    "$ff" -hide_banner -loglevel error -i "${SMOKE_JPEG_SAMPLE}" -frames:v 1 -y "$t/jpg.png"
+    [ -s "$t/jpg.png" ] || die "smoke: JPEG sample decode failed"
+  fi
+  rm -rf "$t"
+  log "SMOKE OK: encodes AV1/VP9/Opus/MP3/JPEG; H.264/HEVC/AAC decoders present."
+}
+
+# ---------------------------------------------------------------------------
 # Make installed pkg-config files relocatable so the .deb/tarball work from any install location
 # (e.g. /opt/ffmpeg-free) without a manual prefix fixup — e.g. when building OpenCV against
 # ffmpeg-free. Rewrites the absolute build prefix to pkg-config's ${pcfiledir} anchor.
@@ -253,4 +295,5 @@ build_ffmpeg
 relocatable_pkgconfig
 write_buildinfo
 audit
+smoke_test
 log "Done. Staged in ${PREFIX}"
