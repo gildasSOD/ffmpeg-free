@@ -26,8 +26,9 @@ shipping: software copyright (no GPL/AGPL/non-free entanglements) **and** codec 
 7. [Platforms & hardware acceleration](#7-platforms--hardware-acceleration)
 8. [Build it yourself](#8-build-it-yourself)
 9. [Install](#9-install)
-10. [LGPL compliance checklist (for downstream users)](#10-lgpl-compliance-checklist)
-11. [References](#references)
+10. [Royalty-free OpenCV & GStreamer](#10-royalty-free-opencv--gstreamer)
+11. [LGPL compliance checklist (for downstream users)](#11-lgpl-compliance-checklist)
+12. [References](#references)
 
 ---
 
@@ -299,7 +300,25 @@ tarballs are unsigned — if Gatekeeper quarantines a browser download, clear it
 
 ---
 
-## 10. LGPL compliance checklist
+## 10. Royalty-free OpenCV & GStreamer
+
+The royalty-free guarantee only holds **end-to-end** if the libraries that *wrap* FFmpeg link **this**
+build instead of the distro's GPL FFmpeg. A stock OpenCV (`apt`/`pip`) or GStreamer `gst-libav` is linked
+against `libx264`/`libx265`, so its `VideoWriter`/encoders can still emit H.264 — rebuild them against
+ffmpeg-free and they *physically can't*.
+
+**→ Full guidance and build scripts: [`scripts/opencv/`](scripts/opencv/README.md).** It covers:
+
+- **`build_opencv.sh`** — build OpenCV (+CUDA/contrib) linked to ffmpeg-free, with a link-verification
+  step and Jetson / JetPack 6.2 defaults.
+- **Prebuilt Jetson image** — `ghcr.io/gildassod/opencv-free-jetson` (skip the multi-hour on-device build).
+- **`build_gstreamer_ffmpeg_free.sh`** — rebuild GStreamer's `gst-libav` (the `avenc_*`/`avdec_*` elements)
+  against ffmpeg-free, plus the JetPack-6.2 architecture note (system GStreamer for hardware input +
+  OpenCV `CAP_FFMPEG` for royalty-free encode).
+
+---
+
+## 11. LGPL compliance checklist
 
 If you **embed** these libraries in your own product, the LGPL still imposes obligations (the binaries
 here are built to make compliance easy):[^ffmpeg-legal]
