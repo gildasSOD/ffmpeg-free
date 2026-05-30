@@ -225,6 +225,22 @@ audit() {
   log "AUDIT OK: LGPL, no nonfree, encoders limited to the royalty-free allowlist."
 }
 
+# ---------------------------------------------------------------------------
+# Make installed pkg-config files relocatable so the .deb/tarball work from any install location
+# (e.g. /opt/ffmpeg-free) without a manual prefix fixup — e.g. when building OpenCV against
+# ffmpeg-free. Rewrites the absolute build prefix to pkg-config's ${pcfiledir} anchor.
+# ---------------------------------------------------------------------------
+relocatable_pkgconfig() {
+  local d="${PREFIX}/lib/pkgconfig" pc
+  [ -d "$d" ] || return 0
+  for pc in "$d"/*.pc; do
+    [ -f "$pc" ] || continue
+    sed -e "s|${PREFIX}|\${pcfiledir}/../..|g" \
+        -e 's|^prefix=.*|prefix=${pcfiledir}/../..|' "$pc" > "$pc.tmp" && mv "$pc.tmp" "$pc"
+  done
+  log "pkg-config files made relocatable (prefix=\${pcfiledir}/../..)"
+}
+
 build_dav1d
 build_svtav1
 build_aom
@@ -234,6 +250,7 @@ build_ogg_vorbis
 build_lame
 build_webp
 build_ffmpeg
+relocatable_pkgconfig
 write_buildinfo
 audit
 log "Done. Staged in ${PREFIX}"
