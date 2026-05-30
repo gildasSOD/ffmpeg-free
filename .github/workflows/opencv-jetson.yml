@@ -1,0 +1,61 @@
+name: opencv-jetson
+
+# Royalty-free OpenCV image for Jetson (JetPack 6.2): OpenCV+CUDA linked against ffmpeg-free.
+# This is a HEAVY build (~1-3 h) — manual trigger only, never on push.
+
+on:
+  workflow_dispatch:
+    inputs:
+      opencv_version:
+        description: "OpenCV git tag"
+        default: "4.11.0"
+      l4t_tag:
+        description: "l4t-jetpack base tag (JetPack 6.2 ≈ r36.4.x)"
+        default: "r36.4.0"
+      push:
+        description: "Push image to ghcr.io"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: opencv-jetson
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: OpenCV + ffmpeg-free (Jetson)
+    runs-on: ubuntu-24.04-arm        # native arm64 — the l4t base is arm64, no QEMU
+    timeout-minutes: 350             # under the 6 h hard limit; CUDA OpenCV build is long
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - if: ${{ inputs.push }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/opencv-free-jetson
+          tags: |
+            type=raw,value=${{ inputs.opencv_version }}-jp62
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
+        with:
+          context: .
+          file: scripts/opencv/Dockerfile.jetson
+          platforms: linux/arm64
+          push: ${{ inputs.push }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            OPENCV_VERSION=${{ inputs.opencv_version }}
+            L4T_TAG=${{ inputs.l4t_tag }}

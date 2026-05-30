@@ -1,0 +1,44 @@
+# syntax=docker/dockerfile:1
+#
+# Royalty-free OpenCV for NVIDIA Jetson (JetPack 6.2 / L4T r36).
+# OpenCV + CUDA + contrib, with video I/O linked against ffmpeg-free — so cv::VideoWriter can
+# only encode royalty-free codecs. System GStreamer (1.20, with NVIDIA HW plugins) is kept for
+# hardware INPUT; royalty-free ENCODE goes through OpenCV's CAP_FFMPEG backend (ffmpeg-free).
+#
+# Build from the repo ROOT:
+#   docker buildx build -f scripts/opencv/Dockerfile.jetson --platform linux/arm64 \
+#     -t opencv-free-jetson:local --load .
+#
+ARG L4T_TAG=r36.4.0
+FROM nvcr.io/nvidia/l4t-jetpack:${L4T_TAG}
+
+ARG OPENCV_VERSION=4.11.0
+ARG FFMPEG_FREE_DEB_URL=https://github.com/gildasSOD/ffmpeg-free/releases/download/v0.1.1/ffmpeg-free_8.1.1_arm64-jetson.deb
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 1) ffmpeg-free (royalty-free FFmpeg 8.1.1) from the GitHub Release .deb
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl ca-certificates \
+ && curl -fSL -o /tmp/ffmpeg-free.deb "${FFMPEG_FREE_DEB_URL}" \
+ && apt-get install -y /tmp/ffmpeg-free.deb \
+ && rm -f /tmp/ffmpeg-free.deb && rm -rf /var/lib/apt/lists/*
+
+# 2) OpenCV + CUDA + contrib, linked against ffmpeg-free (headless: no GTK/QT)
+COPY scripts/opencv/build_opencv.sh /tmp/build_opencv.sh
+RUN HEADLESS=1 INSTALL_DEPS=1 KEEP_BUILD=0 \
+    WITH_CUDA=ON WITH_CONTRIB=ON WITH_PYTHON=ON WITH_GSTREAMER=ON \
+    CUDA_ARCH_BIN=8.7 OPENCV_VERSION="${OPENCV_VERSION}" \
+    FFMPEG_FREE_PREFIX=/opt/ffmpeg-free PREFIX=/usr/local \
+    bash /tmp/build_opencv.sh \
+ && rm -f /tmp/build_opencv.sh && rm -rf /var/lib/apt/lists/*
+
+# 3) Smoke test: OpenCV imports, FFmpeg backend present, and it links ffmpeg-free
+RUN python3 -c "import cv2; print('OpenCV', cv2.__version__); \
+import re; bi=cv2.getBuildInformation(); \
+print('\n'.join(l for l in bi.splitlines() if re.search('FFMPEG|GStreamer', l)))" \
+ && ldd /usr/local/lib/libopencv_videoio.so* | grep -q '/opt/ffmpeg-free/lib/libavcodec' \
+    && echo 'OK: OpenCV videoio links ffmpeg-free'
+
+LABEL org.opencontainers.image.title="opencv-free-jetson" \
+      org.opencontainers.image.description="OpenCV+CUDA on Jetson (JetPack 6.2), video I/O via royalty-free ffmpeg-free" \
+      org.opencontainers.image.licenses="Apache-2.0"
