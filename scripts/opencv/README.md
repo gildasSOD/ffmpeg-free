@@ -1,3 +1,9 @@
+<p align="right">
+  <a href="README.md"><img src="https://flagcdn.com/24x18/gb-eng.png" width="24" alt="English"> English</a>
+  &nbsp;|&nbsp;
+  <a href="README.ja.md"><img src="https://flagcdn.com/24x18/jp.png" width="24" alt="日本語"> 日本語</a>
+</p>
+
 # Royalty-free OpenCV (linked against ffmpeg-free)
 
 Build OpenCV so its video I/O uses **[ffmpeg-free](../../README.md)** instead of the distro's GPL
@@ -12,7 +18,7 @@ to **rebuild OpenCV against ffmpeg-free** and drop the patent encoders from the 
 ## Files
 | File | Purpose |
 |---|---|
-| `build_opencv.sh` | Clean, parameterized OpenCV+CUDA+contrib build linked to ffmpeg-free. **Supersedes** `build_opencv_jetpack62_temporary.sh` (delete that once happy). |
+| `build_opencv.sh` | Clean, parameterized OpenCV+CUDA+contrib build linked to ffmpeg-free (link verification, Jetson/JetPack 6.2 defaults). |
 | `build_gstreamer_ffmpeg_free.sh` | Rebuild GStreamer's `gst-libav` (avenc_*/avdec_*) against ffmpeg-free — see the Jetson caveat below. |
 | `Dockerfile.jetson` | Reproducible image: `l4t-jetpack:r36` → ffmpeg-free → OpenCV (skips the multi-hour on-device build). |
 | `../../.github/workflows/opencv-jetson.yml` | Manual CI that builds & publishes the Jetson image to ghcr. |

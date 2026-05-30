@@ -322,7 +322,7 @@ tarball は未署名です。ブラウザでダウンロードした際に Gatek
 `libx264`/`libx265` をリンクしているため、その `VideoWriter`／エンコーダは依然として H.264 を出力できます。
 ffmpeg-free に対してビルドし直せば、*物理的に出力できなくなります*。
 
-**→ 詳しいガイドとビルドスクリプト：[`scripts/opencv/`](scripts/opencv/README.md)。** 以下を扱います。
+**→ 詳しいガイドとビルドスクリプト：[`scripts/opencv/`](scripts/opencv/README.ja.md)。** 以下を扱います。
 
 - **`build_opencv.sh`** — OpenCV（+CUDA/contrib）を ffmpeg-free にリンクしてビルド。リンク先の検証ステップと
   Jetson / JetPack 6.2 向けの既定値付き。
