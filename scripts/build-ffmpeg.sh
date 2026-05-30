@@ -29,6 +29,7 @@ mkdir -p "${PREFIX}" "${WORK}" "${SRC_CACHE}"
 export PKG_CONFIG_PATH="${PREFIX}/lib/pkgconfig:${PREFIX}/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
 export PATH="${PREFIX}/bin:${PATH}"
 export LD_LIBRARY_PATH="${PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+export DYLD_FALLBACK_LIBRARY_PATH="${PREFIX}/lib:${DYLD_FALLBACK_LIBRARY_PATH:-/usr/local/lib:/usr/lib}"  # macOS run-time fallback
 CFLAGS_EXTRA="-I${PREFIX}/include"
 LDFLAGS_EXTRA="-L${PREFIX}/lib"
 
@@ -210,6 +211,10 @@ write_buildinfo() {
 # ---------------------------------------------------------------------------
 audit() {
   log "Auditing ${PREFIX}/bin/ffmpeg"
+  # The binary must actually RUN — otherwise the checks below pass vacuously (this masked a
+  # broken macOS build where ffmpeg couldn't load libvpx). No '|| true' here, on purpose.
+  "${PREFIX}/bin/ffmpeg" -hide_banner -version >/dev/null 2>&1 \
+    || die "AUDIT FAILED: ${PREFIX}/bin/ffmpeg does not run (unresolved shared library?)"
   local cfg; cfg="$("${PREFIX}/bin/ffmpeg" -hide_banner -buildconf 2>/dev/null || true)"
   if grep -qE -- '--enable-gpl|--enable-nonfree' <<<"$cfg"; then
     die "AUDIT FAILED: binary is GPL/nonfree"
@@ -283,6 +288,45 @@ relocatable_pkgconfig() {
   log "pkg-config files made relocatable (prefix=\${pcfiledir}/../..)"
 }
 
+# ---------------------------------------------------------------------------
+# Make the binaries/libraries relocatable so the tarball/.deb run from any location.
+#   Linux : $ORIGIN-relative rpath via patchelf.
+#   macOS : rewrite each dylib id + every reference into our prefix to @rpath, and add
+#           @loader_path rpaths. (libvpx installs a BARE install_name that dyld can't resolve,
+#           which silently broke every macOS ffmpeg until the smoke test caught it.)
+# ---------------------------------------------------------------------------
+make_relocatable() {
+  case "$(uname -s)" in
+    Linux)
+      command -v patchelf >/dev/null 2>&1 || { log "WARN: patchelf missing; tarball not relocatable"; return 0; }
+      find "${PREFIX}/bin" -type f -exec patchelf --set-rpath '$ORIGIN/../lib' {} + 2>/dev/null || true
+      ;;
+    Darwin)
+      local f base dep
+      for f in "${PREFIX}"/lib/*.dylib; do
+        [ -f "$f" ] || continue
+        install_name_tool -id "@rpath/$(basename "$f")" "$f" 2>/dev/null || true
+      done
+      for f in "${PREFIX}"/bin/* "${PREFIX}"/lib/*.dylib; do
+        [ -f "$f" ] || continue
+        while IFS= read -r dep; do
+          base="$(basename "$dep")"
+          if [[ "$dep" == "${PREFIX}/"* ]] || { [[ "$dep" != /* && "$dep" != @* ]] && [ -e "${PREFIX}/lib/${base}" ]; }; then
+            install_name_tool -change "$dep" "@rpath/${base}" "$f" 2>/dev/null || true
+          fi
+        done < <(otool -L "$f" 2>/dev/null | awk 'NR>1{print $1}')
+      done
+      for f in "${PREFIX}"/bin/*;      do [ -f "$f" ] && install_name_tool -add_rpath "@loader_path/../lib" "$f" 2>/dev/null || true; done
+      for f in "${PREFIX}"/lib/*.dylib; do [ -f "$f" ] && install_name_tool -add_rpath "@loader_path"      "$f" 2>/dev/null || true; done
+      # install_name_tool invalidates the code signature; re-sign ad-hoc or arm64 macOS SIGKILLs it.
+      for f in "${PREFIX}"/bin/* "${PREFIX}"/lib/*.dylib; do
+        [ -f "$f" ] && codesign --force --sign - "$f" 2>/dev/null || true
+      done
+      ;;
+  esac
+  log "Made binaries/libraries relocatable ($(uname -s))"
+}
+
 build_dav1d
 build_svtav1
 build_aom
@@ -292,6 +336,7 @@ build_ogg_vorbis
 build_lame
 build_webp
 build_ffmpeg
+make_relocatable
 relocatable_pkgconfig
 write_buildinfo
 audit
