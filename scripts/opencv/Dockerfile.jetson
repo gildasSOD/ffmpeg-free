@@ -12,7 +12,7 @@
 ARG L4T_TAG=r36.4.0
 FROM nvcr.io/nvidia/l4t-jetpack:${L4T_TAG}
 
-ARG OPENCV_VERSION=4.11.0
+ARG OPENCV_VERSION=4.13.0   # >= 4.13.0 required: older OpenCV won't compile against FFmpeg 8
 ARG FFMPEG_FREE_DEB_URL=https://github.com/gildasSOD/ffmpeg-free/releases/download/v0.1.1/ffmpeg-free_8.1.1_arm64-jetson.deb
 ENV DEBIAN_FRONTEND=noninteractive
 

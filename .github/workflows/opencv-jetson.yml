@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       opencv_version:
-        description: "OpenCV git tag"
-        default: "4.11.0"
+        description: "OpenCV git tag (>= 4.13.0 — older fails against FFmpeg 8)"
+        default: "4.13.0"
       l4t_tag:
         description: "l4t-jetpack base tag (JetPack 6.2 ≈ r36.4.x)"
         default: "r36.4.0"

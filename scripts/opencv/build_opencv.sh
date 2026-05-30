@@ -13,11 +13,12 @@
 #
 # Usage:
 #   sudo ./build_opencv.sh                          # defaults, install deps, build, install
-#   OPENCV_VERSION=4.11.0 JOBS=4 ./build_opencv.sh
+#   OPENCV_VERSION=4.13.0 JOBS=4 ./build_opencv.sh
 #   INSTALL_DEPS=0 WITH_CONTRIB=OFF HEADLESS=1 ./build_opencv.sh
 #
 # Tunables (env vars; shown with defaults):
-#   OPENCV_VERSION=4.11.0     OpenCV + opencv_contrib git tag
+#   OPENCV_VERSION=4.13.0     OpenCV + opencv_contrib git tag (>= 4.13.0 REQUIRED: older OpenCV
+#                             uses avcodec_close/av_stream_get_side_data, removed in FFmpeg 7/8)
 #   PREFIX=/usr/local         install prefix
 #   FFMPEG_FREE_PREFIX=/opt/ffmpeg-free   where `apt install ffmpeg-free` put it
 #   BUILD_DIR=$HOME/opencv_build   on-disk build dir (NOT /tmp — that is often tmpfs/RAM)
@@ -28,7 +29,7 @@
 #   INSTALL_DEPS=1  KEEP_BUILD=0
 set -euo pipefail
 
-OPENCV_VERSION="${OPENCV_VERSION:-4.11.0}"
+OPENCV_VERSION="${OPENCV_VERSION:-4.13.0}"
 PREFIX="${PREFIX:-/usr/local}"
 FFMPEG_FREE_PREFIX="${FFMPEG_FREE_PREFIX:-/opt/ffmpeg-free}"
 BUILD_DIR="${BUILD_DIR:-${HOME:-/root}/opencv_build}"

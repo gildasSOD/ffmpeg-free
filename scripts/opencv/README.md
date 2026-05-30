@@ -26,7 +26,7 @@ echo "deb [signed-by=/usr/share/keyrings/ffmpeg-free.gpg] https://gildassod.gith
 sudo apt update && sudo apt install ffmpeg-free
 
 # 2) build OpenCV against it (auto-detects jobs; add zram/swap on an 8 GB Nano for more)
-sudo ./build_opencv.sh                       # or: OPENCV_VERSION=4.11.0 JOBS=4 ./build_opencv.sh
+sudo ./build_opencv.sh                       # or: OPENCV_VERSION=4.13.0 JOBS=4 ./build_opencv.sh
 ```
 The script verifies that `libopencv_videoio` links `/opt/ffmpeg-free/lib/libavcodec` and fails if it
 accidentally picked up the distro FFmpeg. All knobs are env vars (see the header of `build_opencv.sh`).
@@ -74,6 +74,8 @@ combo it refuses to build a broken plugin unless `FORCE=1`.
 ## Status / caveats
 - These build scripts and the image are **v1** — they need on-device / CI validation (OpenCV+CUDA on
   Orin is a long build; expect a shake-out pass like the ffmpeg-free CI took).
-- Confirm the `OPENCV_VERSION` tag exists (default `4.11.0`; the older temporary script used `4.13.0`).
+- **OpenCV ≥ 4.13.0 is required** (the default). Earlier versions fail to *compile* against FFmpeg 8
+  (ffmpeg-free) — they call `avcodec_close` / `av_stream_get_side_data`, removed in FFmpeg 7/8. 4.13.0
+  added the version-guarded code paths (confirmed by CI shake-out: 4.11.0 errors in `cap_ffmpeg_impl.hpp`).
 - LGPL: OpenCV links ffmpeg-free **dynamically** (`.so`) — compliant; ship the source offer (the
   `ffmpeg-*-source.tar.xz` on the ffmpeg-free Release) if you distribute binaries.
