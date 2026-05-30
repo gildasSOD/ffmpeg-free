@@ -27,8 +27,9 @@
 7. [プラットフォームとハードウェアアクセラレーション](#ja7)
 8. [自分でビルドする](#ja8)
 9. [インストール](#ja9)
-10. [LGPL コンプライアンス・チェックリスト（下流の利用者向け）](#ja10)
-11. [参考文献](#references)
+10. [ロイヤリティフリー OpenCV と GStreamer](#ja10)
+11. [LGPL コンプライアンス・チェックリスト（下流の利用者向け）](#ja11)
+12. [参考文献](#references)
 
 ---
 
@@ -314,7 +315,26 @@ tarball は未署名です。ブラウザでダウンロードした際に Gatek
 ---
 
 <a id="ja10"></a>
-## 10. LGPL コンプライアンス・チェックリスト
+## 10. ロイヤリティフリー OpenCV と GStreamer
+
+ロイヤリティフリーの保証は、FFmpeg を*ラップする*ライブラリがディストリの GPL FFmpeg ではなく**この**ビルドを
+リンクして初めて**エンドツーエンド**で成立します。素の OpenCV（`apt`/`pip`）や GStreamer の `gst-libav` は
+`libx264`/`libx265` をリンクしているため、その `VideoWriter`／エンコーダは依然として H.264 を出力できます。
+ffmpeg-free に対してビルドし直せば、*物理的に出力できなくなります*。
+
+**→ 詳しいガイドとビルドスクリプト：[`scripts/opencv/`](scripts/opencv/README.md)。** 以下を扱います。
+
+- **`build_opencv.sh`** — OpenCV（+CUDA/contrib）を ffmpeg-free にリンクしてビルド。リンク先の検証ステップと
+  Jetson / JetPack 6.2 向けの既定値付き。
+- **ビルド済み Jetson イメージ** — `ghcr.io/gildassod/opencv-free-jetson`（オンデバイスの数時間ビルドを省略）。
+- **`build_gstreamer_ffmpeg_free.sh`** — GStreamer の `gst-libav`（`avenc_*`/`avdec_*` 要素）を ffmpeg-free に
+  対して再ビルド。加えて JetPack 6.2 のアーキテクチャ注記（HW 入力はシステムの GStreamer、ロイヤリティフリーな
+  エンコードは OpenCV の `CAP_FFMPEG` を使う）。
+
+---
+
+<a id="ja11"></a>
+## 11. LGPL コンプライアンス・チェックリスト
 
 これらのライブラリを自分の製品に**組み込む**場合、LGPL の義務が依然として課されます（ここで配布するバイナリは
 コンプライアンスを容易にするよう作られています）：[^ffmpeg-legal]
